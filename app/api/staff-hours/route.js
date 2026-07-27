@@ -42,9 +42,6 @@ export async function GET(req) {
 
   const res = await fetch(upstreamUrl, { headers: bypass, cache: 'no-store' })
   const data = await res.json()
-  // TEMP DEBUG — remove once the view-param investigation is resolved.
-  data._debugUpstreamUrl = upstreamUrl
-  data._debugRawViewParam = searchParams.get('view')
   return NextResponse.json(data, { status: res.status, headers: { 'Cache-Control': 'no-store' } })
 }
 
