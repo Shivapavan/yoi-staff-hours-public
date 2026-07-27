@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server'
 
+// Force dynamic rendering: this route reads req.url with `new URL(...)` rather
+// than request.nextUrl.searchParams, which Next.js doesn't always recognize as
+// a dynamic-data dependency — without this, it can statically cache a single
+// build-time response and serve identical data for every param/view value.
+export const dynamic = 'force-dynamic'
+
 // This app has NO Vercel Deployment Protection and holds no restaurant
 // credentials of its own — it's a thin public proxy in front of the real
 // (protected) dashboard's /api/staff-hours route. Two independent gates
@@ -36,6 +42,9 @@ export async function GET(req) {
 
   const res = await fetch(upstreamUrl, { headers: bypass, cache: 'no-store' })
   const data = await res.json()
+  // TEMP DEBUG — remove once the view-param investigation is resolved.
+  data._debugUpstreamUrl = upstreamUrl
+  data._debugRawViewParam = searchParams.get('view')
   return NextResponse.json(data, { status: res.status, headers: { 'Cache-Control': 'no-store' } })
 }
 
