@@ -74,7 +74,6 @@ export default function StaffHoursPublic({ slug }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [expanded, setExpanded] = useState(null)
-  const [paidDrafts, setPaidDrafts] = useState({})
   const [savingEmployee, setSavingEmployee] = useState(null)
 
   const periodParam = periodType === 'weekly' ? weekStart : semiMonthStart
@@ -86,21 +85,20 @@ export default function StaffHoursPublic({ slug }) {
       const d = await r.json()
       if (d.error) throw new Error(d.error)
       setData(d)
-      setPaidDrafts({})
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }, [periodParam, periodType, slug])
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const savePaid = async (employee, amount) => {
+  const setPayment = async (employee, paidAmount, locked) => {
     if (!data) return
     setSavingEmployee(employee)
     try {
       const r = await fetch(`/api/staff-hours?slug=${encodeURIComponent(slug)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employee, periodStart: data.startDate, periodEnd: data.endDate, paidAmount: amount }),
+        body: JSON.stringify({ employee, periodStart: data.startDate, periodEnd: data.endDate, paidAmount, locked }),
       })
       const d = await r.json()
       if (d.error) throw new Error(d.error)
@@ -111,6 +109,8 @@ export default function StaffHoursPublic({ slug }) {
       setSavingEmployee(null)
     }
   }
+  const markPaid = (employee, pay) => setPayment(employee, pay, true)
+  const unlockPaid = (employee) => setPayment(employee, 0, false)
 
   const today = centralToday()
   const todayWeekMon = weekSunday(today)
@@ -211,8 +211,6 @@ export default function StaffHoursPublic({ slug }) {
                 </thead>
                 <tbody>
                   {data.employees.map((emp) => {
-                    const draft = paidDrafts[emp.employee]
-                    const paidValue = draft !== undefined ? draft : String(emp.paid ?? 0)
                     return (
                       <Fragment key={emp.employee}>
                         <tr>
@@ -224,19 +222,30 @@ export default function StaffHoursPublic({ slug }) {
                           <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: '#0d9488' }}>{hm(emp.totalHours)}</td>
                           <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: '#b45309' }}>{money(emp.pay)}</td>
                           <td style={{ ...td, textAlign: 'right' }}>
-                            <input
-                              type="number" step="0.01" min="0"
-                              value={paidValue}
-                              disabled={savingEmployee === emp.employee}
-                              onChange={(e) => setPaidDrafts((cur) => ({ ...cur, [emp.employee]: e.target.value }))}
-                              onBlur={(e) => {
-                                const n = Number(e.target.value)
-                                if (Number.isFinite(n) && n >= 0 && n !== emp.paid) savePaid(emp.employee, n)
-                              }}
-                              style={{ width: 90, textAlign: 'right', padding: '4px 6px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 13, fontWeight: 600, color: '#15803d' }}
-                            />
+                            {emp.locked ? (
+                              <span style={{ fontWeight: 600, color: '#15803d' }}>{money(emp.paid)}</span>
+                            ) : (
+                              <button
+                                onClick={() => markPaid(emp.employee, emp.pay)}
+                                disabled={savingEmployee === emp.employee}
+                                style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #0d9488', background: '#fff', color: '#0d9488', fontSize: 12, fontWeight: 600, cursor: savingEmployee === emp.employee ? 'default' : 'pointer', opacity: savingEmployee === emp.employee ? 0.5 : 1 }}
+                              >
+                                Mark Paid
+                              </button>
+                            )}
                           </td>
-                          <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: emp.balance > 0.01 ? '#dc2626' : '#6b7280' }}>{money(emp.balance)}</td>
+                          <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: !emp.locked && emp.balance > 0.01 ? '#dc2626' : '#6b7280' }}>
+                            {money(emp.balance)}
+                            {emp.locked && (
+                              <button
+                                onClick={() => unlockPaid(emp.employee)}
+                                disabled={savingEmployee === emp.employee}
+                                style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: '#9ca3af', textDecoration: 'underline', background: 'none', border: 'none', cursor: savingEmployee === emp.employee ? 'default' : 'pointer', padding: 0 }}
+                              >
+                                unlock
+                              </button>
+                            )}
+                          </td>
                           <td style={{ ...td, textAlign: 'right', color: '#6b7280', fontSize: 12, whiteSpace: 'nowrap', cursor: 'pointer' }}
                             onClick={() => setExpanded(expanded === emp.employee ? null : emp.employee)}>
                             {expanded === emp.employee ? '▲ Hide' : '▼ Details'}
